@@ -19,7 +19,6 @@ int main(int argc, char const *argv[])
     {
         Error_Handler();
     }
-    fprintf(1, "Sleep start...\n");
     sleep(time);
     exit(0);
 }
