@@ -725,3 +725,19 @@ void procdump(void)
     printf("\n");
   }
 }
+
+// get the number of current processes
+int get_procnum(void)
+{
+  struct proc *p;
+  int procnum = 0;
+
+  for (p = proc; p < &proc[NPROC]; p++)
+  {
+    if (p->state != UNUSED)
+    {
+      procnum++;
+    }
+  }
+  return procnum;
+}

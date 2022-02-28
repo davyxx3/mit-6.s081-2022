@@ -43,3 +43,6 @@ void *memcpy(void *, const void *, uint);
 
 // system call tracing
 int trace(int);
+
+struct sysinfo;
+int sysinfo(struct sysinfo *);
