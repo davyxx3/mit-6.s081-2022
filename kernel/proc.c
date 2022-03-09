@@ -107,9 +107,6 @@ pagetable_t kpagetable()
   // virtio mmio disk interface
   kpagetablemap(ret, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
 
-  // CLINT
-  // kpagetablemap(ret, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
-
   // PLIC
   kpagetablemap(ret, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
 
@@ -221,9 +218,6 @@ freeproc(struct proc *p)
   // free the kernel page table and kernel stack
   if (p->k_pagetable)
   {
-    // pte_t *pte = walk(p->k_pagetable, p->kstack, 0);
-    // uint64 pa = PTE2PA(*pte);
-    // kfree((void *)pa);
     k_pagetable_free(p->k_pagetable);
   }
   p->k_pagetable = 0;
