@@ -1,0 +1,3 @@
+len might be a negative number
+
+e.g. srcva < sz & len < 0
