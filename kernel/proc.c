@@ -193,19 +193,17 @@ found:
 
 void k_pagetable_free(pagetable_t pagetable)
 {
-  // there are 2^9 = 512 PTEs in a page table.
   for (int i = 0; i < 512; i++)
   {
     pte_t pte = pagetable[i];
     uint64 child = PTE2PA(pte);
     if ((pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) == 0)
-    { // 如果该页表项指向更低一级的页表
-      // 递归释放低一级页表及其页表项
+    {
       k_pagetable_free((pagetable_t)child);
       pagetable[i] = 0;
     }
   }
-  kfree((void *)pagetable); // 释放当前级别页表所占用空间
+  kfree((void *)pagetable);
 }
 
 // free a proc structure and the data hanging from it,
@@ -304,8 +302,10 @@ void userinit(void)
 
   // allocate one user page and copy init's instructions
   // and data into it.
-  uvminit_new(p->pagetable, initcode, sizeof(initcode), p->k_pagetable);
+  uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
+  // add mappings to the kernel page table
+  mapping_copy(p->pagetable, p->k_pagetable, 0, PGSIZE);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;     // user program counter
@@ -329,14 +329,24 @@ int growproc(int n)
   sz = p->sz;
   if (n > 0)
   {
-    if ((sz = uvmalloc_new(p->pagetable, sz, sz + n, p->k_pagetable)) == 0)
+    uint64 newsz;
+    // kernel page table grows the same
+    if ((newsz = uvmalloc(p->pagetable, sz, sz + n)) == 0)
     {
       return -1;
     }
+    if (mapping_copy(p->pagetable, p->k_pagetable, sz, n) != 0)
+    {
+      uvmdealloc(p->pagetable, newsz, sz);
+      return -1;
+    }
+    sz = newsz;
   }
   else if (n < 0)
   {
-    sz = uvmdealloc_new(p->pagetable, sz, sz + n, p->k_pagetable);
+    uvmdealloc(p->pagetable, sz, sz + n);
+    // kernel page table shrinks the same
+    sz = k_pagetable_dealloc(p->k_pagetable, sz, sz + n);
   }
   p->sz = sz;
   return 0;
@@ -357,7 +367,7 @@ int fork(void)
   }
 
   // Copy user memory from parent to child.
-  if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0 || kvmcopymappings(np->pagetable, np->k_pagetable, 0, p->sz) < 0)
+  if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0 || mapping_copy(np->pagetable, np->k_pagetable, 0, p->sz) < 0)
   {
     freeproc(np);
     release(&np->lock);
@@ -776,7 +786,7 @@ int either_copyin(void *dst, int user_src, uint64 src, uint64 len)
   struct proc *p = myproc();
   if (user_src)
   {
-    return copyin_new(p->k_pagetable, dst, src, len);
+    return copyin(p->pagetable, dst, src, len);
   }
   else
   {

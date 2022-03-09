@@ -183,10 +183,9 @@ void vmprint(pagetable_t);
 pte_t *walk(pagetable_t, uint64, int);
 extern pagetable_t kernel_pagetable;
 void freewalk(pagetable_t pagetable);
-uint64 uvmalloc_new(pagetable_t pagetable, uint64 oldsz, uint64 newsz, pagetable_t kernel_pagetable);
-uint64 uvmdealloc_new(pagetable_t pagetable, uint64 oldsz, uint64 newsz, pagetable_t kernel_pagetable);
 void uvminit_new(pagetable_t pagetable, uchar *src, uint sz, pagetable_t kernel_pagetable);
-int kvmcopymappings(pagetable_t src, pagetable_t dst, uint64 start, uint64 sz);
+int mapping_copy(pagetable_t src, pagetable_t dst, uint64 start, uint64 sz);
+uint64 k_pagetable_dealloc(pagetable_t kernel_pagetable, uint64 oldsz, uint64 newsz);
 
 // plic.c
 void plicinit(void);

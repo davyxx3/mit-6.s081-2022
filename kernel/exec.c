@@ -52,6 +52,11 @@ int exec(char *path, char **argv)
     uint64 sz1;
     if ((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
+    // set the size limit
+    if (sz1 >= PLIC)
+    {
+      goto bad;
+    }
     sz = sz1;
     if (ph.vaddr % PGSIZE != 0)
       goto bad;
@@ -112,7 +117,8 @@ int exec(char *path, char **argv)
 
   // remove previous mappings
   uvmunmap(p->k_pagetable, 0, PGROUNDUP(p->sz) / PGSIZE, 0);
-  kvmcopymappings(pagetable, p->k_pagetable, 0, sz);
+  // copy mappings from user page table to kernel page table
+  mapping_copy(pagetable, p->k_pagetable, 0, sz);
 
   // Commit to the user image.
   oldpagetable = p->pagetable;

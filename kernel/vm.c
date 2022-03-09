@@ -229,20 +229,6 @@ void uvminit(pagetable_t pagetable, uchar *src, uint sz)
   memmove(mem, src, sz);
 }
 
-// new version of uvminit
-void uvminit_new(pagetable_t pagetable, uchar *src, uint sz, pagetable_t kernel_pagetable)
-{
-  char *mem;
-
-  if (sz >= PGSIZE)
-    panic("inituvm: more than a page");
-  mem = kalloc();
-  memset(mem, 0, PGSIZE);
-  mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W | PTE_R | PTE_X | PTE_U);
-  kpagetablemap(kernel_pagetable, 0, (uint64)mem, PGSIZE, PTE_W | PTE_R | PTE_X);
-  memmove(mem, src, sz);
-}
-
 // Allocate PTEs and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 uint64
@@ -274,42 +260,6 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   return newsz;
 }
 
-// new version of uvmalloc
-uint64 uvmalloc_new(pagetable_t pagetable, uint64 oldsz, uint64 newsz, pagetable_t kernel_pagetable)
-{
-  char *mem;
-  uint64 a;
-
-  if (newsz < oldsz)
-    return oldsz;
-
-  if (newsz - oldsz >= MAX_ADDR || newsz >= MAX_ADDR)
-  {
-    return 0;
-  }
-
-  oldsz = PGROUNDUP(oldsz);
-  for (a = oldsz; a < newsz; a += PGSIZE)
-  {
-    mem = kalloc();
-    if (mem == 0)
-    {
-      uvmdealloc(pagetable, a, oldsz);
-      return 0;
-    }
-    memset(mem, 0, PGSIZE);
-    if (mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W | PTE_X | PTE_R | PTE_U) != 0)
-    {
-      kfree(mem);
-      uvmdealloc(pagetable, a, oldsz);
-      return 0;
-    }
-    // create the mappings in kernel page table as well
-    kpagetablemap(kernel_pagetable, a, (uint64)mem, PGSIZE, PTE_W | PTE_X | PTE_R);
-  }
-  return newsz;
-}
-
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
@@ -331,7 +281,7 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 
 // new version of uvmdealloc
 uint64
-uvmdealloc_new(pagetable_t pagetable, uint64 oldsz, uint64 newsz, pagetable_t kernel_pagetable)
+k_pagetable_dealloc(pagetable_t kernel_pagetable, uint64 oldsz, uint64 newsz)
 {
   if (newsz >= oldsz)
     return oldsz;
@@ -339,7 +289,6 @@ uvmdealloc_new(pagetable_t pagetable, uint64 oldsz, uint64 newsz, pagetable_t ke
   if (PGROUNDUP(newsz) < PGROUNDUP(oldsz))
   {
     int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
-    uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
     // remove the mapping in the kernel page table
     uvmunmap(kernel_pagetable, PGROUNDUP(newsz), npages, 0);
   }
@@ -458,24 +407,27 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 // Return 0 on success, -1 on error.
 int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
-  uint64 n, va0, pa0;
+  // uint64 n, va0, pa0;
 
-  while (len > 0)
-  {
-    va0 = PGROUNDDOWN(srcva);
-    pa0 = walkaddr(pagetable, va0);
-    if (pa0 == 0)
-      return -1;
-    n = PGSIZE - (srcva - va0);
-    if (n > len)
-      n = len;
-    memmove(dst, (void *)(pa0 + (srcva - va0)), n);
+  // while (len > 0)
+  // {
+  //   va0 = PGROUNDDOWN(srcva);
+  //   pa0 = walkaddr(pagetable, va0);
+  //   if (pa0 == 0)
+  //     return -1;
+  //   n = PGSIZE - (srcva - va0);
+  //   if (n > len)
+  //     n = len;
+  //   memmove(dst, (void *)(pa0 + (srcva - va0)), n);
 
-    len -= n;
-    dst += n;
-    srcva = va0 + PGSIZE;
-  }
-  return 0;
+  //   len -= n;
+  //   dst += n;
+  //   srcva = va0 + PGSIZE;
+  // }
+  // return 0;
+
+  // copyin as a adaptor
+  return copyin_new(pagetable, dst, srcva, len);
 }
 
 // Copy a null-terminated string from user to kernel.
@@ -484,48 +436,51 @@ int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 // Return 0 on success, -1 on error.
 int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
-  uint64 n, va0, pa0;
-  int got_null = 0;
+  // uint64 n, va0, pa0;
+  // int got_null = 0;
 
-  while (got_null == 0 && max > 0)
-  {
-    va0 = PGROUNDDOWN(srcva);
-    pa0 = walkaddr(pagetable, va0);
-    if (pa0 == 0)
-      return -1;
-    n = PGSIZE - (srcva - va0);
-    if (n > max)
-      n = max;
+  // while (got_null == 0 && max > 0)
+  // {
+  //   va0 = PGROUNDDOWN(srcva);
+  //   pa0 = walkaddr(pagetable, va0);
+  //   if (pa0 == 0)
+  //     return -1;
+  //   n = PGSIZE - (srcva - va0);
+  //   if (n > max)
+  //     n = max;
 
-    char *p = (char *)(pa0 + (srcva - va0));
-    while (n > 0)
-    {
-      if (*p == '\0')
-      {
-        *dst = '\0';
-        got_null = 1;
-        break;
-      }
-      else
-      {
-        *dst = *p;
-      }
-      --n;
-      --max;
-      p++;
-      dst++;
-    }
+  //   char *p = (char *)(pa0 + (srcva - va0));
+  //   while (n > 0)
+  //   {
+  //     if (*p == '\0')
+  //     {
+  //       *dst = '\0';
+  //       got_null = 1;
+  //       break;
+  //     }
+  //     else
+  //     {
+  //       *dst = *p;
+  //     }
+  //     --n;
+  //     --max;
+  //     p++;
+  //     dst++;
+  //   }
 
-    srcva = va0 + PGSIZE;
-  }
-  if (got_null)
-  {
-    return 0;
-  }
-  else
-  {
-    return -1;
-  }
+  //   srcva = va0 + PGSIZE;
+  // }
+  // if (got_null)
+  // {
+  //   return 0;
+  // }
+  // else
+  // {
+  //   return -1;
+  // }
+
+  // copyinstr as adaptor
+  return copyinstr_new(pagetable, dst, srcva, max);
 }
 
 void vmprint(pagetable_t pagetable)
@@ -555,22 +510,21 @@ void vmprint(pagetable_t pagetable)
   }
 }
 
-int kvmcopymappings(pagetable_t src, pagetable_t dst, uint64 start, uint64 sz)
+// copy mappings from src to dst, which start from va
+int mapping_copy(pagetable_t src, pagetable_t dst, uint64 va, uint64 sz)
 {
   pte_t *pte;
   uint64 pa, i;
   uint flags;
 
-  // PGROUNDUP: 对齐页边界，防止 remap
-  for (i = PGROUNDUP(start); i < start + sz; i += PGSIZE)
+  for (i = PGROUNDUP(va); i < va + sz; i += PGSIZE)
   {
     if ((pte = walk(src, i, 0)) == 0)
-      panic("kvmcopymappings: pte should exist");
+      panic("mapping_copy: pte should exist");
     if ((*pte & PTE_V) == 0)
-      panic("kvmcopymappings: page not present");
+      panic("mapping_copy: page not present");
     pa = PTE2PA(*pte);
-    // `& ~PTE_U` 表示将该页的权限设置为非用户页
-    // 必须设置该权限，RISC-V 中内核是无法直接访问用户页的。
+    // set PTE_U invalid
     flags = PTE_FLAGS(*pte) & ~PTE_U;
     if (mappages(dst, i, PGSIZE, pa, flags) != 0)
     {
