@@ -435,7 +435,7 @@ void vmprint(pagetable_t pagetable)
       {
         printf(" ..");
       }
-      printf("%d: pte %p pa %p fl %p\n", i, pte, PTE2PA(pte), PTE_FLAGS(pte));
+      printf("%d: pte %p pa %p\n", i, pte, PTE2PA(pte));
       if ((pte & (PTE_R | PTE_W | PTE_X)) == 0)
       {
         level++;
