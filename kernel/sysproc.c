@@ -11,10 +11,10 @@ uint64
 sys_exit(void)
 {
   int n;
-  if(argint(0, &n) < 0)
+  if (argint(0, &n) < 0)
     return -1;
   exit(n);
-  return 0;  // not reached
+  return 0; // not reached
 }
 
 uint64
@@ -33,7 +33,7 @@ uint64
 sys_wait(void)
 {
   uint64 p;
-  if(argaddr(0, &p) < 0)
+  if (argaddr(0, &p) < 0)
     return -1;
   return wait(p);
 }
@@ -44,10 +44,10 @@ sys_sbrk(void)
   int addr;
   int n;
 
-  if(argint(0, &n) < 0)
+  if (argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  if(growproc(n) < 0)
+  if (growproc(n) < 0)
     return -1;
   return addr;
 }
@@ -58,12 +58,15 @@ sys_sleep(void)
   int n;
   uint ticks0;
 
-  if(argint(0, &n) < 0)
+  if (argint(0, &n) < 0)
     return -1;
+  backtrace();
   acquire(&tickslock);
   ticks0 = ticks;
-  while(ticks - ticks0 < n){
-    if(myproc()->killed){
+  while (ticks - ticks0 < n)
+  {
+    if (myproc()->killed)
+    {
       release(&tickslock);
       return -1;
     }
@@ -78,7 +81,7 @@ sys_kill(void)
 {
   int pid;
 
-  if(argint(0, &pid) < 0)
+  if (argint(0, &pid) < 0)
     return -1;
   return kill(pid);
 }
@@ -94,4 +97,59 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64 sys_sigalarm(void)
+{
+  struct proc *p = myproc();
+  int ticks;
+  uint64 handler;
+  if (argint(0, &ticks) < 0)
+    return -1;
+  if (argaddr(1, &handler) < 0)
+    return -1;
+  if (ticks > 0)
+  {
+    // When ticks is greater than 0, the alarm is activated.
+    p->ticks = ticks;
+    p->ticks_left = ticks;
+    if (handler != 0)
+    {
+      p->handler = (void (*)())handler;
+    }
+    // Allocate a page for interrupt frame
+    if ((p->intr_frame = (struct trapframe *)kalloc()) == 0)
+    {
+      return -1;
+    }
+    p->handler_valid = 1;
+  }
+  else
+  {
+    // When ticks is 0, the alarm is cancelled.
+    p->ticks = 0;
+    p->ticks_left = 0;
+    p->handler = 0;
+    if (p->intr_frame)
+    {
+      kfree((void *)p->intr_frame);
+    }
+    p->intr_frame = 0;
+    p->handler_valid = 0;
+  }
+  return 0;
+}
+
+uint64 sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  if (p->intr_frame == 0)
+  {
+    return -1;
+  }
+  // Copy the registers from the interrupt frame
+  memcpy(p->trapframe, p->intr_frame, sizeof(struct trapframe));
+  p->ticks_left = p->ticks;
+  p->handler_valid = 1;
+  return 0;
 }

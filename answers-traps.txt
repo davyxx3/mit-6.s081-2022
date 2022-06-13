@@ -1,0 +1,13 @@
+1. a2 stores 13. a1 stores the result of f(8) + 1 which is exactly 12, and a0 stores the string "%d %d\n"
+
+2. 0000000000000026
+
+3. ra + 1528
+
+4. 0000000000000038
+
+5. output: He110 World
+   if RISC-V stores values in big-endian way ,then i should be 0x00726c64
+
+6. my result looks like this: x=3 y=79774456
+   the reason is that the format string receives two arguments which is recognized as the value of a0 and a1. We set a0 to 3, but we didn't set a1, so a1 will be a random value.
